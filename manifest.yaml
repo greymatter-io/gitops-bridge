@@ -1,0 +1,69 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: control-edge
+  namespace: greymatter
+spec:
+  selector:
+    matchLabels:
+      greymatter.io/cluster: control-edge
+  template:
+    metadata:
+      labels:
+        greymatter.io/cluster: control-edge
+    spec:
+      containers:
+        - name: sidecar
+          image: quay.io/greymatterio/gm-proxy:1.7.0
+          ports:
+            - name: proxy
+              containerPort: 10808
+            - name: control-port
+              containerPort: 50000
+          env:
+            - name: XDS_CLUSTER
+              value: control-edge
+            - name: ENVOY_ADMIN_LOG_PATH
+              value: /dev/stdout
+            - name: PROXY_DYNAMIC
+              value: "true"
+            - name: XDS_ZONE
+              value: default-zone
+            - name: XDS_HOST
+              value: controlensemble.greymatter.svc.cluster.local
+            - name: XDS_PORT
+              value: "50000"
+            - name: LOG_LEVEL
+              value: debug
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /etc/proxy/tls/sidecar
+          imagePullPolicy: Always
+      volumes:
+        - name: tls-certs
+          secret:
+            defaultMode: 420
+            secretName: gm-edge-ingress-certs
+      imagePullSecrets:
+        - name: gm-docker-secret
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: control-edge
+  namespace: greymatter
+  # annotations:
+  #   service.beta.kubernetes.io/aws-load-balancer-type: external
+  #   service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+  #   service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  selector:
+    greymatter.io/cluster: control-edge
+  type: LoadBalancer
+  ports:
+    - name: greymatter
+      port: 10808
+      targetPort: 10808
+    - name: control
+      port: 50000
+      targetPort: 50000
